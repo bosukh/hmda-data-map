@@ -1,0 +1,244 @@
+
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>HMDA Data Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <link rel="stylesheet" href="static/jquery-jvectormap-2.0.3/jquery-jvectormap-2.0.3.css" type="text/css" media="screen"/>
+  <script src="https://code.jquery.com/jquery-3.2.1.min.js"
+  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+  crossorigin="anonymous"></script>
+  <script src="static/jquery-jvectormap-2.0.3/jquery-jvectormap-2.0.3.min.js"></script>
+  <script src="static/jquery-jvectormap-world-mill.js"></script>
+  <script src="static/jquery-jvectormap-us-lcc.js"></script>
+  <style media="screen">
+    body {
+      background-color: #e0f7fa;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="row">
+      <div class="col-xs-12 col-md-12 col-lg-12">
+        <h1>HDMA Data Map by BoSuk Hong</h1>
+        <h4>
+          - Color level is based on 2014 total loan amount.
+        </h4>
+        <h4>
+          - Hover over to the colored region to see the details.
+        </h4>
+        <h4>
+          - Click on the state to see the detailed view of counties.
+        </h4>
+        <h4>
+          - Yellow regions are the counties with "good" (discussed in ipython notebook) trends.
+        </h4>
+        <h4>
+          - Counties can be selected/un-selected.
+        </h4>
+        <h4>
+          - Click the back button at the left bottom to go back to state view.
+        </h4>
+        <div id="map" style="width: 100%; height: 700px; margin:auto;"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+  function template(strings, ...keys) {
+    // FROM https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Template_literals
+    return (function(...values) {
+      var dict = values[values.length - 1] || {};
+      var result = [strings[0]];
+      keys.forEach(function(key, i) {
+        var value = Number.isInteger(key) ? values[key] : dict[key];
+        result.push(value, strings[i + 1]);
+      });
+      return result.join('');
+    });
+  }
+  var tipTable = template`<table class="table table-bordered">
+    <tr>
+      <th rowspan="2">Year</th>
+      <th colspan="3">Total(in $000's)</th>
+      <th colspan="3">Median(in $000's)</th>
+      <th rowspan="2">FFIEC Median Income(in $000's)</th>
+    </tr>
+    <tr>
+      <th>All</th>
+      <th>Purchase</th>
+      <th>Refinance</th>
+      <th>All</th>
+      <th>Purchase</th>
+      <th>Refinance</th>
+    </tr>
+    <tr>
+      <td>2012</td>
+      <td>${'2012_Loan_Amount_000'}</td>
+      <td>${'2012_Purchase'}</td>
+      <td>${'2012_Refinance'}</td>
+      <td>${'2012_Median_Loan_Amount_000'}</td>
+      <td>${'2012_Median_Purchase'}</td>
+      <td>${'2012_Median_Refinance'}</td>
+      <td>${'2012_FFIEC_Median_Family_Income'}</td>
+    </tr>
+    <tr>
+      <td>2013</td>
+      <td>${'2013_Loan_Amount_000'}</td>
+      <td>${'2013_Purchase'}</td>
+      <td>${'2013_Refinance'}</td>
+      <td>${'2013_Median_Loan_Amount_000'}</td>
+      <td>${'2013_Median_Purchase'}</td>
+      <td>${'2013_Median_Refinance'}</td>
+      <td>${'2013_FFIEC_Median_Family_Income'}</td>
+    </tr>
+    <tr>
+      <td>2014</td>
+      <td>${'2014_Loan_Amount_000'}</td>
+      <td>${'2014_Purchase'}</td>
+      <td>${'2014_Refinance'}</td>
+      <td>${'2014_Median_Loan_Amount_000'}</td>
+      <td>${'2014_Median_Purchase'}</td>
+      <td>${'2014_Median_Refinance'}</td>
+      <td>${'2014_FFIEC_Median_Family_Income'}</td>
+    </tr>
+  </table>`;
+  var stateData, countyData, totalLoan, totalLoanValues, countyTotalLoan,
+      countyTotalLoanValues, goodCounties;
+  var promises = [];
+  promises.push(
+    $.ajax({
+      dataType: "json",
+      async: true,
+      url: 'static/by_state.json',
+      success: function(data){
+        stateData = data.map(function(line){
+          return JSON.parse(line);
+        });
+        totalLoan = stateData.filter(function(line){
+          if (line.As_of_Year == 2014) {
+            return true;
+          }
+        });
+        totalLoanValues = totalLoan.map(function(line){
+          return line.Loan_Amount_000
+        });
+        totalLoan = totalLoan.reduce(function(acc, line){
+          var res = {};
+          res[line.State] = line.Loan_Amount_000;
+          return Object.assign(acc, res);
+        }, {});
+      }
+    })
+  );
+
+  promises.push(
+    $.ajax({
+      dataType: "json",
+      async: true,
+      url: 'static/by_county.json',
+      success: function(data){
+        countyData = data.map(function(line){
+          return JSON.parse(line);
+        });
+        countyTotalLoan = countyData.filter(function(line){
+          if (line.As_of_Year == 2014) {
+            return true;
+          }
+        });
+        countyTotalLoan = countyTotalLoan.reduce(function(acc, line){
+          var res = {};
+          res[line.Geo_Code] = line.Loan_Amount_000;
+          return Object.assign(acc, res);
+        }, {});
+      }
+    })
+  );
+
+  promises.push(
+    $.ajax({
+      dataType: "json",
+      async: true,
+      url: 'static/by_county_range.json',
+      success: function(data){
+        countyTotalLoanValues = data.reduce(function(acc, line){
+          line = JSON.parse(line);
+          var res = {};
+          res[line.State.toLocaleLowerCase() + '_lcc_en'] = {max:line.Max, min:line.Min};
+          return Object.assign(acc, res);
+        }, {});
+      }
+    })
+  );
+
+  promises.push(
+    $.ajax({
+      dataType: "json",
+      async: false,
+      url: 'static/good_counties.json',
+      success: function(data){
+        var res = {}
+        for (col in data){
+          res[col.toLowerCase() + '_lcc_en'] = data[col];
+        }
+        goodCounties = res;
+      }
+    })
+  );
+
+  $.when.apply($, promises).then(
+  	$(function(){
+      map = new jvm.MultiMap({
+  	    container: $('#map'),
+  	    maxLevel: 1,
+  	    main: {
+  	      map: 'us_lcc',
+          series:{
+            regions: [{
+              scale: ['#b2dfdb', '#00897b'],
+              attribute: 'fill',
+              values: totalLoan,
+              min: jvm.min(totalLoanValues),
+              max: jvm.max(totalLoanValues)
+            }],
+            markerStyle: {
+              initial: {
+                fill: '#F8E23B',
+                stroke: '#383f47'
+              }
+            },
+            markers: [{latLng: [38.671,	-75.33], name:'SU'}]
+
+          },
+          onRegionTipShow: function(event, label, code){
+            var dat = stateData.reduce(function(acc, line){
+              var res = {};
+              if (line.State ==  code) {
+                for (col of ['Loan_Amount_000', 'Purchase', 'Refinance', 'Median_Loan_Amount_000', 'Median_Purchase', 'Median_Refinance', 'FFIEC_Median_Family_Income']){
+                  res[line.As_of_Year + '_' + col] = line[col];
+                }
+              }
+              return Object.assign(acc, res);
+            }, {});
+            label.html(
+              '<h4>'+label.html()+'</h4>' + tipTable(dat)
+            );
+          }
+  	    },
+  	    mapUrlByCode: function(code, multiMap){
+  	      return 'static/us_county/jquery-jvectormap-data-'+
+  		     code.toLowerCase()+'-'+
+  		     multiMap.defaultProjection+'-en.js';
+  	    }
+  	  });
+      map = map.maps.us_lcc;
+      map.setFocus({'regions':['US-DC', 'US-DE', 'US-MD', 'US-VA', 'US-WV', 'US-NC', 'US-PA']});
+    })
+  );
+
+
+  </script>
+</body>
+</html>

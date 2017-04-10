@@ -1,0 +1,24 @@
+runtime: python27
+api_version: 1
+threadsafe: true
+service: default
+instance_class: F1
+automatic_scaling:
+  min_idle_instances: 1
+
+handlers:
+- url: /static
+  static_dir: app/static
+  application_readable: true
+  http_headers:
+    Cache-Control: max-age=5184000
+    ETag: b498b71644eb4f7f862d2cd15f3d99f5
+
+- url: /.*
+  script: main.app
+
+libraries:
+- name: jinja2
+  version: "2.6"
+- name: ssl
+  version: latest
